@@ -1,9 +1,10 @@
 local M = {}
 
-local ledger = require('zeitraum.ledger')
+local logger = require('zeitraum.logger')
 local util = require('zeitraum.util')
+local test = require('zeitraum.test')
 
-local onkey_handler_added = false
+local onkey_handler_added = true
 local log = { }
 local opts = { }
 
@@ -35,9 +36,11 @@ function M.setup(_opts)
         add_on_key_handler()
         onkey_handler_added = true
     end
-    write_ledger_debounced = util.debounce(M.save_log, opts.write_rate_ms or 5000)
-    update_ledger_debounced = util.debounce(ledger.add_work, opts.update_rate_ms or 1000)
-    M.load_log()
+--    write_ledger_debounced = util.debounce(M.save_log, opts.write_rate_ms or 5000)
+--    update_ledger_debounced = util.debounce(ledger.add_work, opts.update_rate_ms or 1000)
+--    M.load_log()
+    local results = test.run_suite()
+    test.print_results(results)
 end
 
 
