@@ -1,10 +1,35 @@
 
 -- TODO: Consider using a library once you figured out how luarocks works
 
-local ONE_MINUTE_IN_SECS = 60
-local ONE_HOUR_IN_SECS = ONE_MINUTE_IN_SECS * 60
-local ONE_DAY_IN_SECS = ONE_HOUR_IN_SECS * 24
-local ONE_WEEK_IN_SECS = ONE_DAY_IN_SECS * 7
+--[[
+--
+
+10d to 10m
+mon (means mon 00:00 til mon 24:00)
+mon - now  (now is implied)
+feb -
+feb 
+2024 (number w/o suffix is year)
+0 - mon (0 is implied)
+- sunday
+today (alias for 00:00 - 24:00)
+yesterday (alias for YESTERDATE:00:00 - YESTERDATE:24:00)
+2023-jun - 2024-feb (year-month)
+jan-12 - (omitted year is implied to be current year)
+10d (10 days ago)
+since X (alias for X - now)
+until X (alias for epoch - X)
+
+--]]
+
+
+local function tokenise(input)
+    local tokens = {}
+    for token in input:gmatch("%S+") do
+        table.insert(tokens, token)
+    end
+    return tokens
+end
 
 local WEEKDAYS = {
     "Sunday", "Monday", "Tuesday", "Wednesday",
@@ -22,6 +47,46 @@ local MONTH_SET = {
     ["may"] = 5, ["june"] = 6, ["july"] = 7, ["august"] = 8,
     ["september"] = 9, ["october"] = 10, ["november"] = 11, ["december"] = 12,
 }
+
+
+local ONE_MINUTE_IN_SECS = 60
+local ONE_HOUR_IN_SECS = ONE_MINUTE_IN_SECS * 60
+local ONE_DAY_IN_SECS = ONE_HOUR_IN_SECS * 24
+local ONE_WEEK_IN_SECS = ONE_DAY_IN_SECS * 7
+
+local start_of_day = function(unixtime) 
+    return unixtime - (unixtime % ONE_DAY_IN_SECS) 
+end
+
+local end_of_day = function(unixtime) 
+    return start_of_day(unixtime) + ONE_DAY_IN_SECS - 1
+end
+
+local add_days = function(unixtime, days) 
+    return unixtime + (days * ONE_DAY_IN_SECS) 
+end
+
+
+
+
+local function parse(token_lc, ostime)
+    ostime = ostime or os.time()
+    local result
+    if token_lc == "today" then
+        result = {
+            type = "datetime",
+            starts = function() start_of_day(ostime()) end,
+            ends = function() end_of_day(ostime()) end,
+        }
+    elseif token_lc == "yesterday" then
+        result = {
+            type = "datetime",
+            starts = function() add_days(start_of_day(ostime()), -1) end,
+            ends = function() add_days(end_of_day(ostime()), -1) end,
+        }
+    end
+
+
 
 
 -- @param month number

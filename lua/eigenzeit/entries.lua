@@ -1,4 +1,4 @@
-local util = require('zeitraum.util')
+local util = require('eigenzeit.util')
 
 local KIND_WORK = "_work"
 

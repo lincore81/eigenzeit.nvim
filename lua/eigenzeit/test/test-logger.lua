@@ -1,5 +1,5 @@
-local logger = require('zeitraum.logger')
-local t = require('zeitraum.test')
+local logger = require('eigenzeit.logger')
+local t = require('eigenzeit.test')
 
 return {
     { "get_last_entry", function()
@@ -116,6 +116,8 @@ return {
             "No break when gap is at/below threshold")
         t.assert_equals(logger.had_break(log, 201, 100), true,
             "Break when gap is above threshold")
+        t.assert_equals(logger.had_break(log, 501, 100), true,
+            "Break when gap is above threshold")
     end },
 
     { "log_work", function()
@@ -123,9 +125,38 @@ return {
         logger.log_work(log, 100, 10000)
         t.assert_has_entries(log[#log], { kind = "_work", from = 100, to = 100 },
             "Logging work in empty log just adds the work entry")
+        log = {
+            { kind = "_work", from = 0, to = 100 },
+        }
         logger.log_work(log, 200, 10000)
-        t.assert_equals(log[#log].to, 200, "Logging work in non-empty log updates the work entry")
+        t.assert_equals(log[#log].to, 200,
+            "Logging work in non-empty log updates the work entry")
+        log = { { kind = "_work", from = 0, to = 200 }, }
         logger.log_work(log, 500, 100)
-        t.assert_equals(log[#log].to, 300, "Logging after break adds break threshold to work entry")
+        t.assert_equals(log[#log].to, 500,
+            "Logging after break creates new work entry")
+        t.assert_equals(log[#log - 1].to, 300,
+            "Logging after break seals previous work entry and adds break_threshold")
+    end },
+
+    { "select_entries", function()
+        local log = {
+            { kind = "foo", timestamp = 100 },
+            { kind = "_work", from = 200, to = 300, tag = "important" },
+            { kind = "bar", timestamp = 400},
+            { kind = "_work", from = 410, to = 500},
+            { kind = "baz", timestamp = 600},
+        }
+
+        t.assert_equals(#logger.select_entries(log), 5,
+            "Selecting with no filter returns all entries")
+        t.assert_equals(#logger.select_entries(log, {kind = "_work"}), 2,
+            "Selecting with kind filter returns only entries of that kind")
+        t.assert_equals(#logger.select_entries(log, {from = 400}), 3,
+            "Selecting with from filter returns only entries from that timestamp")
+        t.assert_equals(#logger.select_entries(log, {to = 400}), 3,
+            "Selecting with to filter returns only entries to that timestamp")
+        t.assert_equals(#logger.select_entries(log, {other_keys = {"tag"}}), 1,
+            "Selecting with other_keys filter returns only entries with that key")
     end },
 }

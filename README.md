@@ -1,80 +1,155 @@
-# Zeitraum - Automatic work tracker and allocater
+# Eigenzeit - An automatic work logger for neovim
 
-> en: time range
-> lit: time space
-
-
-## The purpose of Zeitraum
-I need to create a monthly report on how much time I spent on jira tickets. I
-am terrible at time tracking (and I hate it!), so I want my computer to do it
-for me.
+<div style="display:flex; flex-direction:row;align-items:center;gap: 4rem;">
+    <pre style="flex-grow:1;text-align:center;vertical-align:center">Terrible timesheets,
+I automate the pain away,
+My mind is at ease.</pre>
+    <img src="./docs/buddha-round-480.png" alt="" width="240"/>
+</div>
 
 
-## Project objectives in order of importance
-1. Write a neovim plugin because why not.
-2. Write a neovim plugin that keeps track of what I'm working on and for how long and can create a nice report for me.
+## Use case
 
+You might want to use this plugin if:
+- You have a strong intrinsic or extrinsic motivation to track your work.
+- You hate timesheets and cannot or don't want to muster the discipline to keep one.
+- The idea of an unautomated menial tasks keeps you up at night.
+- You want to be able to type `:Eigenzeit work feb` and get a report you can send to someone who cares.
+- You find existing solutions too well-maintained and user-friendly.
 
-## Why not an existing solution?
-See objective number 1.
+## Installation & Setup
+Please refer to your plugin manager's documentation if necessary. 
+Here's a snippet for packer:
 
-
-## How should it work
-- Ideally, Zeitraum would consist of a server and client, where the latter is a neovim plugin.
-- This allows the implementation of different clients and standalone use.
-- Any keypress is considered to indicate that work is being done
-- The directory and branch being worked in tell Zr what is being worked on.
-- Users can specify filters to define which directories and branches should be tracked
-- E. g. a pattern like '!~/projects/personal/*` would ignore all work being done in that directory.
-
-
-## How does timing work
-- When the user presses any key, 5 minutes of work (configurable) are added to the records.
-- If another keypress comes in less time, the previous 'work packet's length is reduced to the time delta.
-- In other words, we assume that up to 5 minutes of not pressing a key is still work (reading code, drinking water etc.)
-
-## How is work allocated
-- Each piece of work gets one (or more?) tags assigned
-- Tags have rules 
-
-### Example:
 ```lua
-config = {
-    {
-        "work email",
-        match_dir = "~/.email/work/*",
-    },
-    {
-        {"jira-all", "jira-%d"},
-        match_dir = "~/projects/work/*",
-        match_git_branch = "JIRA-(%d)",
+use {
+    'lincore81/eigenzeit',
+    config = function()
+        require('eigenzeit').setup{
+            -- snip --
+        }
+    end
+}
+```
+
+By default, Eigenzeit will log three things:
+- When you open a buffer (and which path)
+- When you switch git branches (and which branch)
+- How long you pound on the keyboard - and by extension, how long you're idle.
+
+Assuming you don't equally care about everything you did in the editor, you can
+define a set of tags (aka categories) that work should be sorted into. 
+This does not alter the log, but it turns the log into a meaningful report.
+
+Here's an example:
+
+```lua
+require('eigenzeit').setup{
+    tags = {
+        { "BE", condition = {"file-path", pattern = "projects/backend"}, consume=true },
+        { "FE", condition = {"file-path", pattern = "projects/frontend"}, consume=true },
+        { "Project: $1", condition = {"file-path", pattern = "projects/([%w_-]+)"} },
     },
 }
 ```
 
-- Rules are evaluated from top to bottom
-- If a rule matches, the work will be "consumed" and associated with the tag(s).
-- If no rule matches, the work is dropped and not stored.
+And here's the whole reason why I wrote this:
 
-## How is work stored
-- Ideally clients should report every single keystroke, but report several seconds of work
-- The server will regularly chunk consecutive work packets and store the result
-- If server and/or client get interrupted, only a few seconds should be lost.
-
-### Data example:
-
+```lua
+require('eigenzeit').setup{
+    tags = {
+        { "$1", condition = {"git-branch", pattern = "(JIRA-%d+)"} },
+    },
+}
 ```
-["work_email"] = {
-    { from=46172896, to=446738634 },
-    { from=46172896, to=446738634 },
+
+- Tags are tested in order. by default all matching tags are applied. To prevent this, you can add `consume = true` to a tag. 
+- Right now there are only two conditions available, but you can create your own (see 'Customisation').
+
+### Options
+You can pass the following options to the setup function:
+
+```lua
+require('eigenzeit').setup{
+    tags = { 
+        -- snip -- 
+    },
+    options = { 
+        -- SHOWING DEFAULT VALUES --
+
+        -- Right now there's only one log file, but this will change later.
+        log_dir = "$PLUGIN_DATA/logs",
+
+        -- Best to keep this on unless you have good reason to be paranoid.
+        -- There will be a command to delete untagged entries once I got around to it.
+        log_untagged = true, 
+
+        -- If not empty, any activity outside of these paths will be ignored.
+        -- Expects a lua table of glob pattern strings.
+        allowed_paths = {},
+
+        -- Any activity inside these paths will be ignored.
+        -- Can be used together with allowed_paths.
+        -- Expects a lua table of glob pattern strings.
+        disallowed_paths = {},
+    }
 }
 ```
 
 
-## Rough server CLI
-zeitraum pause | resume | start | stop 
-zeitraum add [wd] {seconds} (adds a work packet in the given directory)
-zeitraum log [tag] [seconds] (manually add time)
-zeitraum unlog [tag] [seconds] (manually remove time)
-zeitraum report [tag] {range}
+## Customisation
+Besides the builtin functionality, you can add your own events and matchers.
 
+### Events
+Events are simple tables created by autocmds and similar sources. They
+should contain the following data:
+
+```lua
+{
+    name = "moonphase",
+    value = "crescent", -- optional, will be matched against the condition pattern/regex
+    version = 1, -- v1 is implicit, may be useful if you introduce breaking changes
+    foo = 42 -- you can add additional fields for matching/logging if needed
+}
+```
+The event should be passed to the plugin via `require('eigenzeit').put_event(event)`.
+
+### Event matchers
+As the name implies, these functions determine if an event matches a rule.
+Eigenzeit provides a default matcher that matches the event value against a
+rule's condition pattern. If you need more complex logic, you can roll your
+own. Please note that the output should be deterministic and wholly based on
+the given inputs. Otherwise, retroactive application of changed rulesets may not
+work as expected.
+
+The matcher should be added to the setup function like so:
+
+```lua
+require('eigenzeit').setup({
+    matchers = {
+        moonphase = {
+            -- for version 1, index should be made explicit if you need to
+            -- handle multiple versions
+            function(event, condition)
+                -- default implementation if no custom matcher is provided:
+                local shouldMatchValue = condition.value or condition.pattern
+                return shouldMatchValue and event.value:match(condition.pattern) 
+            end,
+        }
+    }
+})
+```
+
+## Planned features (in no particular order)
+- Manual tagging, push/pop tags
+- Multiple conditions per tag with AND/OR
+- use multiple log files. e.g. one per month/quarter
+- caching/bookmarking of log data
+- better query commands
+
+
+## Etyomology
+- ***Yay, it's German!***
+- **Lit.:** 'own time', 'innate time'
+- **Context:** mainly relativity theory, also philosophy, psychology/sociology
+- **Why though?** Zeitraum was taken, I'm German and my boyfriend is a physicist `¯\_(ツ)_/¯`

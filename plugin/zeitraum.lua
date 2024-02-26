@@ -1,1 +1,1 @@
-print("Zeitraum running")
+print("Eigenzeit running")

@@ -1,7 +1,7 @@
 local BREAK_THRESHOLD = 60 * 1000 * 5
 
-local util = require("zeitraum.util")
-local entries = require("zeitraum.entries")
+local util = require("eigenzeit.util")
+local entries = require("eigenzeit.entries")
 
 
 local function make_log()
@@ -42,13 +42,14 @@ end
 
 local function try_seal_maybe_with_break(log, timestamp, break_threshold)
     local latest = log[#log]
-    if not entries.can_seal(latest) then return end
+    if not entries.can_seal(latest) then return false end
     break_threshold = break_threshold or BREAK_THRESHOLD
     local gap = get_current_work_gap(log, timestamp)
     local ts = (gap and gap > break_threshold)
         and latest.to + break_threshold
         or timestamp
     log[#log] = entries.seal_work(latest, ts)
+    return true
 end
 
 
@@ -90,12 +91,11 @@ local function log_work(log, timestamp, break_threshold)
 end
 
 
-local function select_entries(opts, log)
+local function select_entries(log, opts)
     -- TODO: use a better algorithm/data structure for this
-    -- TODO: Can we bookmark start of days/weeks/months?
     -- TODO: Ledgers should have start and end times and we save one file
     --       per month or something (maybe ~2000 entriews)
-    log = log or opts.log
+    opts = opts or {}
     assert(log, "log is required")
     local from = opts.from or opts[1]
     local to = opts.to or opts[2]
@@ -115,7 +115,7 @@ local function select_entries(opts, log)
             or (entry.from and entry.to
                 and (from <= entry.from and to > entry.from
                     or from < entry.to and entry.to <= to))
-        local is_of_kind = in_time_range and not kind or entry.kind == kind
+        local is_of_kind = not kind or entry.kind == kind
         if in_time_range and is_of_kind and util.has_keys(entry, other_keys) then
             table.insert(result, entry)
         end

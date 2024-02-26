@@ -1,8 +1,8 @@
 local M = {}
 
-local logger = require('zeitraum.logger')
-local util = require('zeitraum.util')
-local test = require('zeitraum.test')
+local logger = require('eigenzeit.logger')
+local util = require('eigenzeit.util')
+local test = require('eigenzeit.test')
 
 local onkey_handler_added = true
 local log = { }
@@ -10,8 +10,8 @@ local opts = { }
 
 local dirs = {
     data = vim.fn.stdpath('data'),
-    plugin = vim.fn.stdpath('data') .. '/zeitraum',
-    logs = vim.fn.stdpath('data') .. '/zeitraum/logs',
+    plugin = vim.fn.stdpath('data') .. '/eigenzeit',
+    logs = vim.fn.stdpath('data') .. '/eigenzeit/logs',
 }
 
 M._log = {}
@@ -43,7 +43,6 @@ function M.setup(_opts)
     test.print_results(results)
 end
 
-
 function M.load_log()
     local file = io.open(dirs.plugin .. '/log.json', 'r')
     if file then
@@ -54,7 +53,6 @@ function M.load_log()
         log = { _version = 1 }
     end
 end
-
 
 function M.save_log()
     vim.fn.mkdir(dirs.plugin, 'p')

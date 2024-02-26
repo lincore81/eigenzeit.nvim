@@ -1,4 +1,4 @@
-local entries = require('zeitraum.entries')
+local entries = require('eigenzeit.entries')
 
 return {
     unit = "entries",
