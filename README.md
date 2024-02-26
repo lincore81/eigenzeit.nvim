@@ -1,10 +1,13 @@
 # Eigenzeit - An automatic work logger for neovim
 
-<div style="display:flex; flex-direction:row;align-items:center;gap: 4rem;">
-    <pre style="flex-grow:1;text-align:center;vertical-align:center">Terrible timesheets,
-I automate the pain away,
-My mind is at ease.</pre>
-    <img src="./docs/buddha-round-480.png" alt="" width="240"/>
+<div align="center">
+<pre>
+    Terrible timesheets,
+    I automate the pain away,
+    My mind is at ease.
+</pre>
+
+<img src="./docs/buddha-round-480.png" alt="" width="240"/>
 </div>
 
 
