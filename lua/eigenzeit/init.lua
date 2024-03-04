@@ -1,67 +1,91 @@
-local M = {}
+local WRITE_RATE_MS = 5000
+local LOG_WORK_RATE_MS = 5000
+local BREAK_THRESHOLD_SECS = 5 * 60
 
-local logger = require('eigenzeit.logger')
-local util = require('eigenzeit.util')
-local test = require('eigenzeit.test')
-
-local onkey_handler_added = true
-local log = { }
-local opts = { }
-
-local dirs = {
-    data = vim.fn.stdpath('data'),
-    plugin = vim.fn.stdpath('data') .. '/eigenzeit',
-    logs = vim.fn.stdpath('data') .. '/eigenzeit/logs',
+local M = {
+    log = {},
+    dirs = {
+        data = vim.fn.stdpath('data'),
+        plugin = vim.fn.stdpath('data') .. '/eigenzeit',
+        logs = vim.fn.stdpath('data') .. '/eigenzeit/logs',
+    },
 }
 
-M._log = {}
-M._dirs = dirs
 
-local write_ledger_debounced, update_ledger_debounced
+local write_log_debounced, log_work_debounced
 
-local function add_on_key_handler()
+function M.run_tests(verbose)
+    local test = require('eigenzeit.test')
+    local results = test.run_suite()
+    if verbose or not results.pass then
+        test.print_results(results)
+    end
+end
+
+local function setup_effects(dispatch)
+    local effects = require('eigenzeit.builtin').effects
+    for _, effect in pairs(effects) do
+        effect(dispatch)
+    end
+end
+
+local function setup_key_handler()
     vim.on_key(function()
-        write_ledger_debounced()
-        update_ledger_debounced(log, opts)
+        write_log_debounced()
+        log_work_debounced(
+            M.log,
+            require("eigenzeit.datetime").utc_timestamp(),
+            M.opts.break_threshold or BREAK_THRESHOLD_SECS)
     end)
 end
 
-function M.cmd_dump()
-    vim.print(log)
+function M.setup(_opts)
+    M.opts = _opts or {}
+    if not M.is_setup then
+        if M.opts.logs_dir then M.dirs.logs = M.opts.logs_dir end
+        M.load_log()
+        M._blackboard = {}
+        M.default_matcher = require('eigenzeit.builtin').default_matcher
+        M.dispatch = require('eigenzeit.dispatch').create_dispatch(
+            M.log,
+            M._blackboard,
+            require("eigenzeit.datetime").utc_timestamp)
+        setup_effects(M.dispatch)
+        local logger = require('eigenzeit.logger')
+        local util = require('eigenzeit.util')
+        write_log_debounced = util.debounce(
+            M.save_log,
+            M.opts.write_rate_ms or WRITE_RATE_MS)
+        log_work_debounced = util.debounce(
+            logger.log_work,
+            M.opts.log_work_rate_ms or LOG_WORK_RATE_MS)
+        setup_key_handler()
+        M.is_setup = true
+    end
 end
 
-function M.setup(_opts)
-    opts = _opts or {}
-    if not onkey_handler_added then
-        add_on_key_handler()
-        onkey_handler_added = true
-    end
---    write_ledger_debounced = util.debounce(M.save_log, opts.write_rate_ms or 5000)
---    update_ledger_debounced = util.debounce(ledger.add_work, opts.update_rate_ms or 1000)
---    M.load_log()
-    local results = test.run_suite()
-    test.print_results(results)
-end
+
+---- SERIALISATION ----
 
 function M.load_log()
-    local file = io.open(dirs.plugin .. '/log.json', 'r')
+    local file = io.open(M.dirs.logs .. '/log.json', 'r')
     if file then
         local content = file:read('*a')
         file:close()
-        log = vim.json.decode(content) or {}
+        M.log = vim.json.decode(content) or {}
     else
-        log = { _version = 1 }
+        M.log = { _version = 1 }
     end
 end
 
 function M.save_log()
-    vim.fn.mkdir(dirs.plugin, 'p')
-    local file = io.open(dirs.plugin .. '/log.json', 'w')
+    vim.fn.mkdir(M.dirs.logs, 'p')
+    local file = io.open(M.dirs.logs .. '/log.json', 'w')
     if not file then
         print('Could not open file for writing')
         return
     end
-    file:write(vim.json.encode(log))
+    file:write(vim.json.encode(M.log))
     file:close()
 end
 

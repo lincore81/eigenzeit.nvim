@@ -59,14 +59,16 @@ local function _add_event(log, event, timestamp)
     table.insert(log, entry)
 end
 
-local function log_event(log, event, timestamp, break_threshold)
-    try_seal_maybe_with_break(log, timestamp, break_threshold)
-    _add_event(log, event, timestamp)
-end
-
 local function _new_work(log, timestamp)
     table.insert(log, entries.create_work(timestamp))
 end
+
+local function log_event(log, event, timestamp, break_threshold)
+    try_seal_maybe_with_break(log, timestamp, break_threshold)
+    _add_event(log, event, timestamp)
+    _new_work(log, timestamp)
+end
+
 
 local had_break = function(log, timestamp, break_threshold)
     local latest = log[#log]

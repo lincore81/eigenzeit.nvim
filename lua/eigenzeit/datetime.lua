@@ -1,14 +1,16 @@
-
 -- TODO: Consider using a library once you figured out how luarocks works
 
 --[[
 --
 
+
+
+
 10d to 10m
 mon (means mon 00:00 til mon 24:00)
 mon - now  (now is implied)
 feb -
-feb 
+feb
 2024 (number w/o suffix is year)
 0 - mon (0 is implied)
 - sunday
@@ -23,189 +25,117 @@ until X (alias for epoch - X)
 --]]
 
 
-local function tokenise(input)
-    local tokens = {}
-    for token in input:gmatch("%S+") do
-        table.insert(tokens, token)
-    end
-    return tokens
+local function utc_timestamp()
+    ---@diagnostic disable-next-line: param-type-mismatch
+    return os.time(os.date("!*t"))
 end
 
-local WEEKDAYS = {
-    "Sunday", "Monday", "Tuesday", "Wednesday",
-    "Thursday", "Friday", "Saturday",
-}
-
-local MONTHS = {
-    "January", "February", "March", "April",
-    "May", "June", "July", "August",
-    "September", "October", "November", "December",
-}
-
-local MONTH_SET = {
-    ["january"] = 1, ["february"] = 2, ["march"] = 3, ["april"] = 4,
-    ["may"] = 5, ["june"] = 6, ["july"] = 7, ["august"] = 8,
-    ["september"] = 9, ["october"] = 10, ["november"] = 11, ["december"] = 12,
-}
-
-
-local ONE_MINUTE_IN_SECS = 60
-local ONE_HOUR_IN_SECS = ONE_MINUTE_IN_SECS * 60
-local ONE_DAY_IN_SECS = ONE_HOUR_IN_SECS * 24
-local ONE_WEEK_IN_SECS = ONE_DAY_IN_SECS * 7
-
-local start_of_day = function(unixtime) 
-    return unixtime - (unixtime % ONE_DAY_IN_SECS) 
+local function get_timezone_offset(timestamp)
+    local utcdate = os.date("!*t", timestamp)
+    local localdate = os.date("*t", timestamp)
+    ---@diagnostic disable-next-line: param-type-mismatch
+    return os.difftime(os.time(localdate), os.time(utcdate))
 end
 
-local end_of_day = function(unixtime) 
-    return start_of_day(unixtime) + ONE_DAY_IN_SECS - 1
+local function utc_to_local(utc_timestamp)
+    return utc_timestamp + get_timezone_offset(utc_timestamp)
 end
 
-local add_days = function(unixtime, days) 
-    return unixtime + (days * ONE_DAY_IN_SECS) 
+-- NOTE: Sunday = 1, Monday = 2, ...
+local function get_weekday_index(timestamp)
+    return os.date("*t", timestamp).wday
 end
 
 
+local function start_of_day(timestamp)
+    local date = os.date("*t", timestamp)
+    date.hour = 0
+    date.min = 0
+    date.sec = 0
+    return os.time(date)
+end
 
+local function start_of_today()
+    return start_of_day(os.time())
+end
 
-local function parse(token_lc, ostime)
-    ostime = ostime or os.time()
-    local result
-    if token_lc == "today" then
-        result = {
-            type = "datetime",
-            starts = function() start_of_day(ostime()) end,
-            ends = function() end_of_day(ostime()) end,
-        }
-    elseif token_lc == "yesterday" then
-        result = {
-            type = "datetime",
-            starts = function() add_days(start_of_day(ostime()), -1) end,
-            ends = function() add_days(end_of_day(ostime()), -1) end,
-        }
-    end
-
-
-
-
--- @param month number
--- @param year? number
-local function get_days_in_month(month, year)
-    year = year or tonumber(os.date("%Y"))
-    local days_in_month = {
-        31, 28, 31, 30,
-        31, 30, 31, 31,
-        30, 31, 30, 31,
-    }
-    if month == 2 then
-        local is_leap_year = year % 4 == 0 and (year % 100 ~= 0 or year % 400 == 0)
-        if is_leap_year then return 29 end
-    end
-    return days_in_month[month]
+local function start_of_yesterday()
+    return start_of_day(os.time() - 24 * 60 * 60)
 end
 
 
-local function week_day_to_offset(week_day)
-    week_day = week_day:lower()
-    local offset = {
-        ["sunday"] = 0,
-        ["monday"] = 1,
-        ["tuesday"] = 2,
-        ["wednesday"] = 3,
-        ["thursday"] = 4,
-        ["friday"] = 5,
-        ["saturday"] = 6,
-    }
-    assert(offset[week_day], "Invalid week day")
-    return offset[week_day]
+local function start_of_week(first_day_of_week)
+    local date = os.date("*t")
+    date.wday = first_day_of_week or 1
+    date.hour = 0
+    date.min = 0
+    date.sec = 0
+    return os.time(date)
 end
 
-local function start_of_day(unixtime)
-    return unixtime - (unixtime % ONE_DAY_IN_SECS)
+local function start_of_month()
+    local date = os.date("*t")
+    date.day = 1
+    date.hour = 0
+    date.min = 0
+    date.sec = 0
+    return os.time(date)
 end
 
-local function end_of_day(unixtime)
-    return start_of_day(unixtime) + ONE_DAY_IN_SECS - 1
+local function start_of_year()
+    local date = os.date("*t")
+    date.month = 1
+    date.day = 1
+    date.hour = 0
+    date.min = 0
+    date.sec = 0
+    return os.time(date)
 end
 
-local function start_of_week(unixtime, week_start_offset)
-    week_start_offset = week_start_offset or 0
-    local week_day = os.date("%w", unixtime) + week_start_offset
-    return start_of_day(unixtime) - (week_day * ONE_DAY_IN_SECS)
+local function add_days(timestamp, days)
+    return timestamp + days * 24 * 60 * 60
 end
 
-local function end_of_week(unixtime, week_start_offset)
-    week_start_offset = week_start_offset or 0
-    return start_of_week(unixtime, week_start_offset) + ONE_WEEK_IN_SECS - 1
+local function add_months(timestamp, months)
+    local date = os.date("*t", timestamp)
+    date.month = date.month + months
+    return os.time(date)
 end
 
-local function start_of_month(unixtime)
-    local year = get_year(unixtime)
-    local month = get_month(unixtime)
-    return os.time({year=year, month=month, day=1})
+local function add_years(timestamp, years)
+    local date = os.date("*t", timestamp)
+    date.year = date.year + years
+    return os.time(date)
 end
 
-local function get_month(unixtime)
-    return tonumber(os.date("%m", unixtime))
-end
-
-local function get_year(unixtime)
-    return tonumber(os.date("%Y", unixtime))
-end
-
-
--- TODO: Make me not suck
-local function parse_range(from, to)
-    local result = {}
-    if type(from) == "number" then
-        result.from = from
-    elseif type(from) == "string" then
-        from = from:lower()
-    end
-
-    if from == "today" then
-        result.from = start_of_day(os.time())
-    elseif from == "yesterday" then
-        result.from = start_of_day(os.time() - ONE_DAY_IN_SECS)
-    elseif from == "this_week" then
-        result.from = start_of_week(os.time())
-    elseif from == "last_week" then
-        result.from = start_of_week(os.time() - ONE_WEEK_IN_SECS)
-    elseif from == "this_month" then
-        result.from = start_of_month(os.time())
-    elseif MONTH_SET[from] then
-        local month = MONTH_SET[from]
-        local year = get_year(os.time())
-        result.from = os.time({year=year, month=month, day=1})
+local function add_unit(timestamp, unit, amount)
+    unit = unit:lower()
+    if unit == "day" then
+        return add_days(timestamp, amount)
+    elseif unit == "month" then
+        return add_months(timestamp, amount)
+    elseif unit == "year" then
+        return add_years(timestamp, amount)
     else
-        error("Invalid range")
+        error("Unknown unit: " .. unit)
     end
-
-    if type(to) == "number" then
-        result.to = to
-    elseif type(to) == "string" then
-        to = to:lower()
-    end
-
-    if to == "today" then
-        result.to = end_of_day(os.time())
-    elseif to == "yesterday" then     
-        result.to = end_of_day(os.time() - ONE_DAY_IN_SECS)
-    elseif to == "this_week" then
-        result.to = end_of_week(os.time())
-    elseif to == "last_week" then
-        result.to = end_of_week(os.time() - ONE_WEEK_IN_SECS)
-    elseif to == "this_month" then
-        result.to = end_of_day(os.time())
-    elseif MONTH_SET[to] then
-        local month = MONTH_SET[to]
-        local year = get_year(os.time())
-        local days_in_month = get_days_in_month(month, year)
-        result.to = os.time({year=year, month=month, day=days_in_month})
-    else
-        error("Invalid range")
-    end
-
-    return result
 end
+
+return {
+    utc_timestamp = utc_timestamp,
+    get_timezone_offset = get_timezone_offset,
+    utc_to_local = utc_to_local,
+    start_of_day = start_of_day,
+    start_of_today = start_of_today,
+    start_of_week = start_of_week,
+    start_of_month = start_of_month,
+    start_of_year = start_of_year,
+    start_of_yesterday = start_of_yesterday,
+    add_days = add_days,
+    add_months = add_months,
+    add_years = add_years,
+    weekdays = weekdays,
+    weekdays_short = weekdays_short,
+    months = months,
+    months_short = months_short,
+}

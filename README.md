@@ -14,8 +14,7 @@
 ## Use case
 
 You might want to use this plugin if:
-- You have a strong intrinsic or extrinsic motivation to track your work.
-- You hate timesheets and cannot or don't want to muster the discipline to keep one.
+- You have strong incentive to track your work time.
 - The idea of an unautomated menial tasks keeps you up at night.
 - You want to be able to type `:Eigenzeit work feb` and get a report you can send to someone who cares.
 - You find existing solutions too well-maintained and user-friendly.
@@ -156,3 +155,39 @@ require('eigenzeit').setup({
 - **Lit.:** 'own time', 'innate time'
 - **Context:** mainly relativity theory, also philosophy, psychology/sociology
 - **Why though?** Zeitraum was taken, I'm German and my boyfriend is a physicist `¯\_(ツ)_/¯`
+
+
+## Scratchpad - ignore me
+
+### Effectful parts
+- Effectful code resides in init.lua
+    - initial loading of the log
+    - periodic saving of the log
+        - configurable
+        - I'd prefer 30 second intervals
+        - only write if necessary, obviously
+    - user commands
+    - autocmds
+    - other event sources
+
+### How to detect git branch change?
+https://www.reddit.com/r/neovim/comments/uz3ofs/heres_a_function_to_grab_the_name_of_the_current/
+
+
+### Query syntax
+
+```
+ :Ez today
+ :Ez yesterday
+ :Ez feb
+ :Ez 2024
+ :Ez tues
+ :Ez week -- this week
+ :Ez month -- this month
+ :Ez year -- this year
+ :Ez 2023-12-10 to 2024-03-03
+ :Ez 2023-12-10:10:00 to 2023-03-03:10:00
+```
+
+
+

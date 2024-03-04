@@ -32,10 +32,13 @@ local function run_suite()
     print("Running tests")
     local files = get_test_files()
     local results = {}
+    local all_pass = true
     for _, file in ipairs(files) do
         local result = run_test_file(file)
+        if result.failed > 0 then all_pass = false end
         table.insert(results, result)
     end
+    results.pass = all_pass
     return results
 end
 

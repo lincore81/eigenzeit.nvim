@@ -1,19 +1,18 @@
-
--- Limit the rate at which a function can be called.
-local function debounce(f, limit_ms)
+-- Limit the rate at which a given `func` can be called to once every `limit_ms` 
+-- milliseconds. Additional calls to `func` within this time period are ignored.
+local function debounce(func, limit_ms)
     assert(type(limit_ms) == "number", "limit_ms must be a number")
-    assert(limit_ms >= 100, "limit_ms must be at least 100")
-    assert(type(f) == "function", "f must be a function")
+    assert(limit_ms > 0, "limit_ms must positive")
+    assert(type(func) == "function", "f must be a function")
 
     local last_call = 0
     return function(...)
         local args = {...}
-        -- vim.loop.now() seems to reset after a couple of days, 
-        -- shouldn't be an issue.
         local now = vim.loop.now()
-        if now - last_call > limit_ms then
+        local rolled_over = now < last_call
+        if rolled_over or now - last_call > limit_ms then
             last_call = now
-            return f(unpack(args))
+            return func(unpack(args))
         end
     end
 end
