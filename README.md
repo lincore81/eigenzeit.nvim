@@ -22,7 +22,7 @@ You might want to use this plugin if:
 - You don't mind battle-testing a plugin that's still in its infancy. (But it's written to be audit-proof, if that's any consolation.)
 
 
-## Installation & Setup
+## Installation & Basic Setup
 Please refer to your plugin manager's documentation if necessary. 
 Here's a snippet for packer:
 
@@ -95,6 +95,8 @@ March 2024 up to now:
 32h 02m                           Gaps: 3h 58m
 ```
 
+
+
 ### Options
 You can pass the following options to the setup function:
 
@@ -105,6 +107,9 @@ require('eigenzeit').setup{
     },
     options = { 
         -- SHOWING DEFAULT VALUES --
+
+        -- Used for reporting
+        start_of_week = 1, -- 1 = Sunday, 2 = Monday, ..., 6 = Friday, 7 = Saturday
 
         -- Right now there's only one log file, but this will change later.
         log_dir = "$PLUGIN_DATA/logs",
@@ -122,12 +127,48 @@ require('eigenzeit').setup{
 }
 ```
 
+## Usage
 
-## Customisation
-Besides the builtin functionality, you can emit your own events and add custom
-event matchers.
+### Querying
+You can call `:Eigenzeit` to get a report.
 
-### Effects
+The syntax is `:Eigenzeit [tag1, tag2, ...] [range]`.
+
+#### Range Syntax
+Implicit range:
+- `today`
+- `yesterday`
+- `this week`
+- `last week`
+- `this month`
+- `last month`
+- `this year`
+- `last year`
+- `2024-02-01`
+- `feb(ruary)`
+- `mon(day)`
+- `2023`
+
+Explicit range:
+- `08:00 to 17:00` -- Today from 8am to 5pm, inclusive.
+- `2024-02-01 to 2024-02-29` -- February 2024.
+- `last feb to today` -- February of previous year up to now.
+- `mon to now` -- This Monday up to now (now is a synonym of today).
+
+Note:
+- `this` is implied and can thus be omitted.
+- Queries are case-insensitive.
+- At the moment the following date/time formats are supported:
+    - `YYYY-MM-DDTHH:MM(:SS)` (T, t, -, :, space are all valid separators)
+    - `YYYY-MM-DD`
+    - `HH:MM(:SS)` (24hrs)
+- Support for American date formats will be added later if people care about it.
+- The start of the week defaults to Sunday, you can change it in the setup options (see above).
+- The default range is `this month`.
+
+
+## Advanced Setup & Customisation
+### Custom Effects
 Effects are what I call autocmds, timers etc. that generate Eigenzeit events. 
 To tell Eigenzeit when you want it to log something, you can call
 `require("eigenzeit").dispatch(event)`.
@@ -148,7 +189,7 @@ A few things to note:
 - Events are discarded if the value has not changed.
 
 
-### Event matchers
+### Custom Event Matchers
 Event matchers determine whether a tagging rule should be applied to an event.
 Eigenzeit provides a default matcher that matches the event value against a
 rule's condition pattern. If you need more complex logic, you can roll your
