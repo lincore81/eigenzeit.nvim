@@ -7,17 +7,20 @@
     My mind is at ease.
 </pre>
 
-<img src="./docs/buddha-round-480.png" alt="" width="240"/>
+<img src="./docs/buddha-round-480.png" width="240" alt="A happy Buddha is enjoying neovim on his laptop, while sitting on a tree trunk.">
 </div>
 
 
-## Use case
+***Not ready for use yet, critical features are missing.***
 
+
+## Use case
 You might want to use this plugin if:
-- You have strong incentive to track your work time.
+- You have a strong incentive to track your work time.
 - The idea of an unautomated menial tasks keeps you up at night.
 - You want to be able to type `:Eigenzeit work feb` and get a report you can send to someone who cares.
-- You find existing solutions too well-maintained and user-friendly.
+- You don't mind battle-testing a plugin that's still in its infancy. (But it's written to be audit-proof, if that's any consolation.)
+
 
 ## Installation & Setup
 Please refer to your plugin manager's documentation if necessary. 
@@ -34,39 +37,63 @@ use {
 }
 ```
 
-By default, Eigenzeit will log three things:
-- When you open a buffer (and which path)
-- When you switch git branches (and which branch)
-- How long you pound on the keyboard - and by extension, how long you're idle.
+Calling setup is required.
+Without any extra configuration, Eigenzeit will log your work and changes to the
+file path as well as the current git branch.
 
-Assuming you don't equally care about everything you did in the editor, you can
-define a set of tags (aka categories) that work should be sorted into. 
-This does not alter the log, but it turns the log into a meaningful report.
+You can get a report by calling `:Eigenzeit`, which will just list the total
+hours worked this month. 
+
+
+### Tagging Rules
+Tags are used to categorise your work in reports. The underlying data is not
+affected at all, so you can try out different rulesets without losing any
+information.
 
 Here's an example:
 
 ```lua
 require('eigenzeit').setup{
     tags = {
-        { "BE", condition = {"file-path", pattern = "projects/backend"}, consume=true },
-        { "FE", condition = {"file-path", pattern = "projects/frontend"}, consume=true },
-        { "Project: $1", condition = {"file-path", pattern = "projects/([%w_-]+)"} },
+        { "good times", 
+            condition = {"file_path", pattern = "projects/green-pastures"}, 
+        },
+        { "$1", 
+            group = "bad times", 
+            condition = {
+                {"git_branch", pattern = "(JIRA[-_ ]%d+.*)$"},
+                {"file_path", pattern = "projects/crusty-socks"},
+            },
+            consume = true,
+        },
     },
 }
 ```
 
-And here's the whole reason why I wrote this:
+A few things to note:
+- The `condition` field takes an event type and a pattern to match the event value against. There are 2 builtin events:
+  - `file_path` - The value is the current absolute file path.
+  - `git_branch` - The value is the current git branch.
+- Multiple tags can be applied to the same piece of work, but Eigenzeit is smart enough to not double-count the time.
+- Tag rules are applied in order of appearance.
+- The `consume` flag is used to prevent further tags from being applied to the same piece of work (it doesn't really do anything here).
+- Backreferences can be used to create 'dynamic' tags.
+- You can `group` (dynamic) tags if you are interested in the total time spent on a group of tags.
 
-```lua
-require('eigenzeit').setup{
-    tags = {
-        { "$1", condition = {"git-branch", pattern = "(JIRA-%d+)"} },
-    },
-}
+Calling `:Eigenzeit` will now show a report like this:
+
 ```
+March 2024 up to now:
 
-- Tags are tested in order. by default all matching tags are applied. To prevent this, you can add `consume = true` to a tag. 
-- Right now there are only two conditions available, but you can create your own (see 'Customisation').
+ 4h 41m - good times
+27h 17m - bad times
+          |  3h 21m - JIRA-1221-refactor-ui
+          |  4h 55m - JIRA-1234-add-feature
+          |  8h 39m - JIRA-1301-unbreak-ui
+          | 10h 22m - JIRA-1378-remove-feature
+----------------------------------------------
+32h 02m                           Gaps: 3h 58m
+```
 
 ### Options
 You can pass the following options to the setup function:
@@ -82,11 +109,8 @@ require('eigenzeit').setup{
         -- Right now there's only one log file, but this will change later.
         log_dir = "$PLUGIN_DATA/logs",
 
-        -- Best to keep this on unless you have good reason to be paranoid.
-        -- There will be a command to delete untagged entries once I got around to it.
-        log_untagged = true, 
-
         -- If not empty, any activity outside of these paths will be ignored.
+        -- Includes buffers without a file path.
         -- Expects a lua table of glob pattern strings.
         allowed_paths = {},
 
@@ -100,54 +124,72 @@ require('eigenzeit').setup{
 
 
 ## Customisation
-Besides the builtin functionality, you can add your own events and matchers.
+Besides the builtin functionality, you can emit your own events and add custom
+event matchers.
 
-### Events
-Events are simple tables created by autocmds and similar sources. They
-should contain the following data:
+### Effects
+Effects are what I call autocmds, timers etc. that generate Eigenzeit events. 
+To tell Eigenzeit when you want it to log something, you can call
+`require("eigenzeit").dispatch(event)`.
 
+An event should look like this:
 ```lua
 {
-    name = "moonphase",
-    value = "crescent", -- optional, will be matched against the condition pattern/regex
-    version = 1, -- v1 is implicit, may be useful if you introduce breaking changes
-    foo = 42 -- you can add additional fields for matching/logging if needed
+    name = "user:battery",
+    value = 0.7,        
+    state = "charging",
 }
 ```
-The event should be passed to the plugin via `require('eigenzeit').put_event(event)`.
+
+A few things to note:
+- "name" must be a string.
+- "value" must be truthy. If you use anything other than a number or string, you will need to provide a custom matcher.
+- Other fields are optional and can be used to provide additional context. They will be logged as well.
+- Events are discarded if the value has not changed.
+
 
 ### Event matchers
-As the name implies, these functions determine if an event matches a rule.
+Event matchers determine whether a tagging rule should be applied to an event.
 Eigenzeit provides a default matcher that matches the event value against a
 rule's condition pattern. If you need more complex logic, you can roll your
 own. Please note that the output should be deterministic and wholly based on
 the given inputs. Otherwise, retroactive application of changed rulesets may not
-work as expected.
+work as expected. 
 
 The matcher should be added to the setup function like so:
 
 ```lua
 require('eigenzeit').setup({
     matchers = {
-        moonphase = {
-            -- for version 1, index should be made explicit if you need to
-            -- handle multiple versions
+        battery = {
             function(event, condition)
-                -- default implementation if no custom matcher is provided:
-                local shouldMatchValue = condition.value or condition.pattern
-                return shouldMatchValue and event.value:match(condition.pattern) 
+                -- default implementation:
+                local shouldMatchValue = event.value or condition.pattern
+                if not shouldMatchValue then return false end
+                if type(event.value) == "number" then
+                    return event.value == condition.pattern
+                else
+                    return event.value:match(condition.pattern) 
+                end
             end,
         }
     }
 })
 ```
+If you want to add generic matchers, use the `default` key. They will be used if
+no specific matcher is found for an event, but before the builtin matcher.
 
-## Planned features (in no particular order)
-- Manual tagging, push/pop tags
-- Multiple conditions per tag with AND/OR
-- use multiple log files. e.g. one per month/quarter
-- caching/bookmarking of log data
-- better query commands
+```lua
+require('eigenzeit').setup({
+    matchers = {
+        default = {
+            function(event, condition)
+                -- snip --
+            end,
+        }
+    }
+})
+```
 
 
 ## Etyomology
@@ -155,39 +197,4 @@ require('eigenzeit').setup({
 - **Lit.:** 'own time', 'innate time'
 - **Context:** mainly relativity theory, also philosophy, psychology/sociology
 - **Why though?** Zeitraum was taken, I'm German and my boyfriend is a physicist `¯\_(ツ)_/¯`
-
-
-## Scratchpad - ignore me
-
-### Effectful parts
-- Effectful code resides in init.lua
-    - initial loading of the log
-    - periodic saving of the log
-        - configurable
-        - I'd prefer 30 second intervals
-        - only write if necessary, obviously
-    - user commands
-    - autocmds
-    - other event sources
-
-### How to detect git branch change?
-https://www.reddit.com/r/neovim/comments/uz3ofs/heres_a_function_to_grab_the_name_of_the_current/
-
-
-### Query syntax
-
-```
- :Ez today
- :Ez yesterday
- :Ez feb
- :Ez 2024
- :Ez tues
- :Ez week -- this week
- :Ez month -- this month
- :Ez year -- this year
- :Ez 2023-12-10 to 2024-03-03
- :Ez 2023-12-10:10:00 to 2023-03-03:10:00
-```
-
-
 
